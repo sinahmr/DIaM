@@ -1,0 +1,44 @@
+DATA:
+  data_name: coco
+  data_root: data/coco/
+  train_list: lists/coco/train.txt
+  val_list: lists/coco/val.txt
+  split: 0
+  use_split_coco: True
+  workers: 3
+  image_size: 417
+  mean: [0.485, 0.456, 0.406]
+  std: [0.229, 0.224, 0.225]
+  pin_memory: True
+
+MODEL:
+  pretrained: True
+  bins: [1, 2, 3, 6]
+  dropout: 0.1
+  m_scale: False
+  layers: 50
+  bottleneck_dim: 512
+
+EVALUATION:
+  debug: False
+  ckpt_path: model_ckpt/
+  load_model_id: 1
+  ckpt_used: model
+  test_num: 10000
+  shot: 5
+  batch_size_val: 50
+  n_runs: 5
+  support_only_one_novel: True
+  use_training_images_for_supports: False
+  generate_new_support_set_for_each_task: False
+  shuffle_test_data: True
+  manual_seed: 2023
+  gpus: [0]
+
+CLASSIFIER:
+  weights: [100, 1, 1, 100]
+  adapt_iter: 100
+  cls_lr: 0.00125
+  pi_estimation_strategy: self
+  pi_update_at: [10]
+  fine_tune_base_classifier: True
