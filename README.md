@@ -172,10 +172,11 @@ We gratefully thank the authors of [RePRI](https://github.com/mboudiaf/RePRI-for
 If you find this project useful, please consider citing:
 
 ```bibtex
-@InProceedings{hajimiri2023diam,
+@inproceedings{hajimiri2023diam,
   title={A Strong Baseline for Generalized Few-Shot Semantic Segmentation},
   author={Hajimiri, Sina and Boudiaf, Malik and Ben Ayed, Ismail and Dolz, Jose},
-  booktitle={Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
-  year={2023},
+  booktitle={Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition},
+  pages={11269--11278},
+  year={2023}
 }
 ```
