@@ -62,7 +62,7 @@ Default configuration files can be found in `config/`. Data are located in `data
 ## &#x2699; Training (optional)
 
 If you want to use the pre-trained models, this step is optional. Our contribution lies in the inference phase and our approach is modular, i.e., it can be applied on top of any segmentation model that is trained on the base classes. 
-We use a simple training scheme by minimizing a standard cross-entropy over base classes. To this end, we have used the [`train_base.py`](https://github.com/chunbolang/BAM/blob/main/train_base.py) script and base learner models of [BAM](https://github.com/chunbolang/BAM).
+We use a simple training scheme by minimizing a standard cross-entropy over base classes. To this end, we have used the [`train_base.py`](https://github.com/chunbolang/BAM/blob/main/train_base.py) script and base learner models of [BAM](https://github.com/chunbolang/BAM) (see [this issue](https://github.com/sinahmr/DIaM/issues/3) for more info).
 
 ## &#x1F9EA; Testing
 
