@@ -5,7 +5,7 @@ import time
 from pycocotools.coco import COCO
 
 for dataset in ['train2014', 'val2014']:
-    annFile = os.path.join('annotations', f'instances_{dataset}.json')
+    annFile = os.path.join('raw', f'instances_{dataset}.json')
     img_dir = dataset
     save_dir = 'train' if 'train' in dataset else 'val'
 

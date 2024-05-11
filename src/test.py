@@ -22,11 +22,12 @@ from .util import get_model_dir, fast_intersection_and_union, setup_seed, resume
 def parse_args():
     parser = argparse.ArgumentParser(description='Testing')
     return get_cfg(parser)
-
-
+# data/coco/val2014/COCO_val2014_000000054091.jpg
+# data/coco/val2014/COCO_val2014_000000039115.jpg
 def main_worker(rank: int, world_size: int, args: argparse.Namespace) -> None:
     print(f"==> Running evaluation script")
     setup(args, rank, world_size)
+    
     setup_seed(args.manual_seed)
 
     # ========== Data  ==========
@@ -162,6 +163,7 @@ def validate(args: argparse.Namespace, val_loader: torch.utils.data.DataLoader, 
 
 
 if __name__ == "__main__":
+    print(parse_args())
     args = parse_args()
     os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(str(x) for x in args.gpus)
     os.environ['OPENBLAS_NUM_THREADS'] = '1'

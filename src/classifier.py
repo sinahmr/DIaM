@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 from src.util import compute_wce
 from .util import to_one_hot
-
+from proto.PixelPrototypeCELoss import PixelPrototypeCELoss
 
 class Classifier(object):
     def __init__(self, args, base_weight, base_bias, n_tasks):
@@ -251,7 +251,8 @@ class Classifier(object):
             valid_pixels_q : shape [batch_size_val, 1, h, w]
         """
         l1, l2, l3, l4 = self.weights
-
+        # //added section
+        criterion = PixelPrototypeCELoss() 
         params = [self.novel_weight, self.novel_bias]
         if self.fine_tune_base_classifier:
             params.extend([self.base_weight, self.base_bias])
@@ -269,9 +270,12 @@ class Classifier(object):
         valid_pixels_q = F.interpolate(valid_pixels_q.float(), size=features_q.size()[-2:], mode='nearest').long()
 
         for iteration in range(self.adapt_iter):
+            # Create dictionary with required outputs
+            # preds = {"seg": seg_output,  "logits": logits_q,"target": gt_q }
             logits_s, logits_q = self.get_logits(features_s), self.get_logits(features_q)
             proba_s, proba_q = self.get_probas(logits_s), self.get_probas(logits_q)
-
+            preds = {"seg": logits_s,  "logits": logits_q,"target": features_q }
+            loss_ppc = criterion(preds, features_q) 
             snapshot_proba_q = self.get_base_snapshot_probas(features_q)
             distillation = self.distillation_loss(proba_q, snapshot_proba_q, valid_pixels_q, reduction='none')
             d_kl, entropy, marginal = self.get_entropies(valid_pixels_q, proba_q, reduction='none')
