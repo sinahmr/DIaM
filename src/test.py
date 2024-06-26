@@ -12,7 +12,7 @@ import torch.utils.data
 from torch.nn.parallel import DistributedDataParallel as DDP
 from tqdm import tqdm
 
-from .classifier import Classifier
+from .classifierV1 import Classifier
 from .dataset.dataset import get_val_loader
 from .model.pspnet import get_model
 from .util import get_model_dir, fast_intersection_and_union, setup_seed, resume_random_state, find_free_port, setup, \
@@ -115,7 +115,8 @@ def validate(args: argparse.Namespace, val_loader: torch.utils.data.DataLoader, 
             # =========== Initialize the classifier and run the method ===============
             base_weight = model.module.classifier.weight.detach().clone().T
             base_bias = model.module.classifier.bias.detach().clone()
-            classifier = Classifier(args, base_weight, base_bias, n_tasks=features_q.size(0))
+            # classifier = DIaMClassifier(args, base_weight, base_bias, n_tasks=features_q.size(0), cfg=cfg, backbone=model,features_s=features_s,gt_s=gt_s,num_novel_classes= args.num_novel_classes,feature_dim=feature_dim)
+            classifier = Classifier(args, base_weight, base_bias, n_tasks=features_q.size(0), cfg=cfg, backbone=model)
             classifier.init_prototypes(features_s, gt_s)
             classifier.compute_pi(features_q, valid_pixels_q, gt_q)  # gt_q won't be used in optimization if pi estimation strategy is self or uniform
             classifier.optimize(features_s, features_q, gt_s, valid_pixels_q)
