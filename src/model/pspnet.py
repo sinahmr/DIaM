@@ -1,12 +1,11 @@
 import torch
 import torch.nn.functional as F
 from torch import nn
-
 from .resnet import resnet50, resnet101
 
 
-def get_model(args) -> nn.Module:
-    return PSPNet(args, zoom_factor=8, use_ppm=True)
+def get_model(cfg: dict, args) -> nn.Module:
+    return PSPNet(cfg, args, zoom_factor=8, use_ppm=True)
 
 
 class PPM(nn.Module):
@@ -30,20 +29,20 @@ class PPM(nn.Module):
 
 
 class PSPNet(nn.Module):
-    def __init__(self, args, zoom_factor, use_ppm):
+    def __init__(self, cfg, args, zoom_factor, use_ppm):
         super(PSPNet, self).__init__()
-        assert 2048 % len(args.bins) == 0
-        assert args.get('num_classes_tr') is not None, 'Get the data loaders first'
+        assert 2048 % len(cfg['MODEL']['bins']) == 0
+        assert args.num_classes_tr is not None, 'Get the data loaders first'
         assert zoom_factor in [1, 2, 4, 8]
         self.zoom_factor = zoom_factor
         self.use_ppm = use_ppm
-        self.m_scale = args.m_scale
-        self.bottleneck_dim = args.bottleneck_dim
+        self.m_scale = cfg['MODEL']['m_scale']
+        self.bottleneck_dim = cfg['MODEL']['bottleneck_dim']
 
-        if args.layers == 50:
-            resnet = resnet50(pretrained=args.pretrained)
+        if cfg['MODEL']['layers'] == 50:
+            resnet = resnet50(pretrained=cfg['MODEL']['pretrained'])
         else:
-            resnet = resnet101(pretrained=args.pretrained)
+            resnet = resnet101(pretrained=cfg['MODEL']['pretrained'])
         self.layer0 = nn.Sequential(resnet.conv1, resnet.bn1, resnet.relu, resnet.conv2, resnet.bn2, resnet.relu,
                                     resnet.conv3, resnet.bn3, resnet.relu, resnet.maxpool)
         self.layer1, self.layer2, self.layer3, self.layer4 = resnet.layer1, resnet.layer2, resnet.layer3, resnet.layer4
@@ -65,13 +64,13 @@ class PSPNet(nn.Module):
             fea_dim = 2048
 
         if use_ppm:
-            self.ppm = PPM(fea_dim, int(fea_dim/len(args.bins)), args.bins)
+            self.ppm = PPM(fea_dim, int(fea_dim/len(cfg['MODEL']['bins'])), cfg['MODEL']['bins'])
             fea_dim *= 2
             self.bottleneck = nn.Sequential(
                 nn.Conv2d(fea_dim, self.bottleneck_dim, kernel_size=3, padding=1, bias=False),
                 nn.BatchNorm2d(self.bottleneck_dim),
                 nn.ReLU(inplace=True),
-                nn.Dropout2d(p=args.dropout),
+                nn.Dropout2d(p=cfg['MODEL']['dropout']),
             )
         self.classifier = nn.Conv2d(self.bottleneck_dim, args.num_classes_tr, kernel_size=1)
 

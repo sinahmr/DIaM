@@ -13,21 +13,21 @@ from .classes import get_split_classes
 from .utils import make_dataset
 
 
-def get_val_loader(args: argparse.Namespace) -> torch.utils.data.DataLoader:
+def get_val_loader(cfg: dict, args: argparse.Namespace) -> torch.utils.data.DataLoader:
     """
         Build the validation loader.
     """
     assert args.split in [0, 1, 2, 3, 10, 11, -1]
     val_transform = transform.Compose([
-            transform.Resize(args.image_size),
+            transform.Resize(cfg['DATA']['image_size']),
             transform.ToTensor(),
-            transform.Normalize(mean=args.mean, std=args.std)])
-    split_classes = get_split_classes(args)
+            transform.Normalize(mean=cfg['DATA']['mean'], std=cfg['DATA']['std'])])
+    split_classes = get_split_classes(cfg, args)
 
     # ===================== Get base and novel classes =====================
-    print(f'Data: {args.data_name}, S{args.split}')
-    base_class_list = split_classes[args.data_name][args.split]['train']
-    novel_class_list = split_classes[args.data_name][args.split]['val']
+    print(f"Data: {cfg['DATA']['data_name']}, S{cfg['DATA']['split']}") 
+    base_class_list = split_classes[cfg['DATA']['data_name']][cfg['DATA']['split']]['train']
+    novel_class_list = split_classes[cfg['DATA']['data_name']][cfg['DATA']['split']]['val']
     print('Novel classes:', novel_class_list)
     args.num_classes_tr = len(base_class_list) + 1  # +1 for bg
     args.num_classes_val = len(novel_class_list)
@@ -37,15 +37,16 @@ def get_val_loader(args: argparse.Namespace) -> torch.utils.data.DataLoader:
     val_data = MultiClassValData(transform=val_transform,
                                  base_class_list=base_class_list,
                                  novel_class_list=novel_class_list,
-                                 data_list_path_train=args.train_list,
-                                 data_list_path_test=args.val_list,
-                                 args=args)
+                                 data_list_path_train=cfg['DATA']['train_list'],
+                                 data_list_path_test=cfg['DATA']['val_list'],
+                                 args=args,
+                                 cfg=cfg)
     val_loader = torch.utils.data.DataLoader(val_data,
-                                             batch_size=args.batch_size_val,
+                                             batch_size=cfg['EVALUATION']['batch_size_val'],
                                              drop_last=False,
-                                             shuffle=args.shuffle_test_data,
-                                             num_workers=args.workers,
-                                             pin_memory=args.pin_memory,
+                                             shuffle=cfg['EVALUATION']['shuffle_test_data'],
+                                             num_workers=cfg['DATA']['workers'],
+                                             pin_memory=cfg['DATA']['pin_memory'],
                                              sampler=val_sampler)
     return val_loader
 
@@ -190,22 +191,22 @@ class ClassicValData(Dataset):
 
 class MultiClassValData(Dataset):
     def __init__(self, transform: transform.Compose, base_class_list: List[int], novel_class_list: List[int],
-                 data_list_path_train: str, data_list_path_test: str, args: argparse.Namespace):
-        self.support_only_one_novel = args.support_only_one_novel
-        self.use_training_images_for_supports = args.use_training_images_for_supports
+                 data_list_path_train: str, data_list_path_test: str, args: argparse.Namespace,cfg: dict):
+        self.support_only_one_novel = cfg['EVALUATION']['support_only_one_novel']
+        self.use_training_images_for_supports = cfg['EVALUATION']['use_training_images_for_supports']
         assert not self.use_training_images_for_supports or data_list_path_train
         support_data_list_path = data_list_path_train if self.use_training_images_for_supports else data_list_path_test
 
-        self.shot = args.shot
-        self.data_root = args.data_root
+        self.shot = cfg['EVALUATION']['shot']
+        self.data_root = cfg['DATA']['data_root']
         self.base_class_list = base_class_list  # Does not contain bg
         self.novel_class_list = novel_class_list
-        self.query_data_list, _ = make_dataset(args.data_root, data_list_path_test,
+        self.query_data_list, _ = make_dataset(cfg['DATA']['data_root'], data_list_path_test,
                                                self.base_class_list + self.novel_class_list,
                                                keep_small_area_classes=True)
         self.complete_query_data_list = self.query_data_list.copy()
         print('Total number of kept images (query):', len(self.query_data_list))
-        support_data_list, self.support_sub_class_file_list = make_dataset(args.data_root, support_data_list_path,
+        support_data_list, self.support_sub_class_file_list = make_dataset(cfg['DATA']['data_root'], support_data_list_path,
                                                                            self.novel_class_list,
                                                                            keep_small_area_classes=False)
         print('Total number of kept images (support):', len(support_data_list))
@@ -236,6 +237,7 @@ class MultiClassValData(Dataset):
         return qry_img, label, valid_pixels, image_path
 
     def generate_support(self, query_image_path_list, remove_them_from_query_data_list=False):
+        print(f'generating data...')
         image_list, label_list = list(), list()
         support_image_path_list, support_label_path_list = list(), list()
         for c in self.novel_class_list:
@@ -290,4 +292,5 @@ class MultiClassValData(Dataset):
             self.query_data_list = self.complete_query_data_list.copy()
             for i, l in zip(support_image_path_list, support_label_path_list):
                 self.query_data_list.remove((i, l))
+        print(f'exiting generating of data')
         return spprt_imgs, spprt_labels

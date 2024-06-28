@@ -1,5 +1,6 @@
 import argparse
 import os
+import yaml
 import time
 from typing import Tuple
 
@@ -26,23 +27,29 @@ def parse_args():
 # data/coco/val2014/COCO_val2014_000000039115.jpg
 def main_worker(rank: int, world_size: int, args: argparse.Namespace) -> None:
     print(f"==> Running evaluation script")
+    print(f'NAME SPACE....{args}')
+    with open(args.config, 'r') as f:
+        cfg = yaml.safe_load(f)
+    
     setup(args, rank, world_size)
     
-    setup_seed(args.manual_seed)
+    setup_seed(cfg['EVALUATION']['manual_seed'])
+    # setup_seed(args.manual_seed)
 
     # ========== Data  ==========
-    val_loader = get_val_loader(args)
+    val_loader = get_val_loader(cfg, args)
+    # val_loader = get_val_loader(args)
 
     # ========== Model  ==========
-    model = get_model(args).to(rank)
+    model = get_model(cfg,args).to(0)
     model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
-    model = DDP(model, device_ids=[rank])
+    model = DDP(model, device_ids=[0])
 
-    root = get_model_dir(args)
+    root = get_model_dir(cfg, args)
 
     print("=> Creating the model")
-    if args.ckpt_used is not None:
-        filepath = os.path.join(root, f'{args.ckpt_used}.pth')
+    if cfg['EVALUATION']['ckpt_used'] is not None:
+        filepath = os.path.join(root, f"{cfg['EVALUATION']['ckpt_used']}.pth")
         assert os.path.isfile(filepath), filepath
         checkpoint = torch.load(filepath)
         model.load_state_dict(checkpoint['state_dict'])
@@ -51,27 +58,27 @@ def main_worker(rank: int, world_size: int, args: argparse.Namespace) -> None:
         print("=> Not loading anything")
 
     # ========== Test  ==========
-    validate(args=args, val_loader=val_loader, model=model)
+    validate(args=args, val_loader=val_loader, model=model, cfg=cfg)
     cleanup()
 
 
-def validate(args: argparse.Namespace, val_loader: torch.utils.data.DataLoader, model: DDP) -> Tuple[torch.tensor, torch.tensor]:
-    print('\n==> Start testing ({} runs)'.format(args.n_runs), flush=True)
-    random_state = setup_seed(args.manual_seed, return_old_state=True)
+def validate(args: argparse.Namespace, val_loader: torch.utils.data.DataLoader, model: DDP,cfg: dict) -> Tuple[torch.tensor, torch.tensor]:
+    print('\n==> Start testing ({} runs)'.format(cfg['EVALUATION']['n_runs']), flush=True)
+    random_state = setup_seed(cfg['EVALUATION']['manual_seed'], return_old_state=True)
     device = torch.device('cuda:{}'.format(dist.get_rank()))
     model.eval()
 
     c = model.module.bottleneck_dim
     h = model.module.feature_res[0]
     w = model.module.feature_res[1]
-
-    nb_episodes = len(val_loader) if args.test_num == -1 else int(args.test_num / args.batch_size_val)
-    runtimes = torch.zeros(args.n_runs)
-    base_mIoU, novel_mIoU = [torch.zeros(args.n_runs, device=device) for _ in range(2)]
+    print(f'channel .....{c}')
+    nb_episodes = len(val_loader) if cfg['EVALUATION']['test_num'] == -1 else int(cfg['EVALUATION']['test_num'] / cfg['EVALUATION']['batch_size_val'])
+    runtimes = torch.zeros(cfg['EVALUATION']['n_runs'])
+    base_mIoU, novel_mIoU = [torch.zeros(cfg['EVALUATION']['n_runs'], device=device) for _ in range(2)]
 
     # ========== Perform the runs  ==========
-    for run in range(args.n_runs):
-        print('Run', run + 1, 'of', args.n_runs)
+    for run in range(cfg['EVALUATION']['n_runs']):
+        print('Run', run + 1, 'of', cfg['EVALUATION']['n_runs'])
         # The order of classes in the following tensors is the same as the order of classifier (novels at last)
         cls_intersection = torch.zeros(args.num_classes_tr + args.num_classes_val)
         cls_union = torch.zeros(args.num_classes_tr + args.num_classes_val)
@@ -79,14 +86,15 @@ def validate(args: argparse.Namespace, val_loader: torch.utils.data.DataLoader, 
 
         runtime = 0
         features_s, gt_s = None, None
-        if not args.generate_new_support_set_for_each_task:
+        if not cfg['EVALUATION']['generate_new_support_set_for_each_task']:
             with torch.no_grad():
                 spprt_imgs, s_label = val_loader.dataset.generate_support([], remove_them_from_query_data_list=True)
-                nb_episodes = len(val_loader) if args.test_num == -1 else nb_episodes  # Updates nb_episodes since some images were removed by generate_support
+                nb_episodes = len(val_loader) if cfg['EVALUATION']['test_num'] == -1 else nb_episodes  # Updates nb_episodes since some images were removed by generate_support
                 spprt_imgs = spprt_imgs.to(device, non_blocking=True)
                 s_label = s_label.to(device, non_blocking=True)
                 features_s = model.module.extract_features(spprt_imgs).detach().view((args.num_classes_val, args.shot, c, h, w))
                 gt_s = s_label.view((args.num_classes_val, args.shot, args.image_size, args.image_size))
+                print(f'running here...')
 
         for _ in tqdm(range(nb_episodes), leave=True):
             t0 = time.time()
@@ -103,18 +111,19 @@ def validate(args: argparse.Namespace, val_loader: torch.utils.data.DataLoader, 
                 features_q = model.module.extract_features(qry_img).detach().unsqueeze(1)
                 valid_pixels_q = q_valid_pix.unsqueeze(1).to(device)
                 gt_q = q_label.unsqueeze(1)
-
+                print(f'running here. images..')
                 query_image_path_list = list(img_path)
-                if args.generate_new_support_set_for_each_task:
+                if cfg['EVALUATION']['generate_new_support_set_for_each_task']:
                     spprt_imgs, s_label = val_loader.dataset.generate_support(query_image_path_list)
                     spprt_imgs = spprt_imgs.to(device, non_blocking=True)
                     s_label = s_label.to(device, non_blocking=True)
-                    features_s = model.module.extract_features(spprt_imgs).detach().view((args.num_classes_val, args.shot, c, h, w))
-                    gt_s = s_label.view((args.num_classes_val, args.shot, args.image_size, args.image_size))
+                    features_s = model.module.extract_features(spprt_imgs).detach().view((args.num_classes_val, acfg['EVALUATION']['shot'], c, h, w))
+                    gt_s = s_label.view((args.num_classes_val, cfg['EVALUATION']['shot'], cfg['DATA']['image_size'], cfg['DATA']['image_size']))
 
             # =========== Initialize the classifier and run the method ===============
             base_weight = model.module.classifier.weight.detach().clone().T
             base_bias = model.module.classifier.bias.detach().clone()
+            print(f'running classifier...')
             # classifier = DIaMClassifier(args, base_weight, base_bias, n_tasks=features_q.size(0), cfg=cfg, backbone=model,features_s=features_s,gt_s=gt_s,num_novel_classes= args.num_novel_classes,feature_dim=feature_dim)
             classifier = Classifier(args, base_weight, base_bias, n_tasks=features_q.size(0), cfg=cfg, backbone=model)
             classifier.init_prototypes(features_s, gt_s)
@@ -164,25 +173,42 @@ def validate(args: argparse.Namespace, val_loader: torch.utils.data.DataLoader, 
 
 
 if __name__ == "__main__":
-    print(parse_args())
-    args = parse_args()
-    os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(str(x) for x in args.gpus)
-    os.environ['OPENBLAS_NUM_THREADS'] = '1'
+    # parser = argparse.ArgumentParser(description='DIaM Training and Testing Script')
+    # parser.add_argument('--config', type=str, help='Path to YAML config file')
+    # args = parse_args()
+    # os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(str(x) for x in args.gpus)
+    # os.environ['OPENBLAS_NUM_THREADS'] = '1'
+    
+    # if args.debug:
+    #     args.test_num = 64
+    #     args.n_runs = 2
 
-    if args.debug:
-        args.test_num = 64
-        args.n_runs = 2
+    # world_size = len(args.gpus)
+    # distributed = world_size > 1
+    # assert not distributed, 'Testing should not be done in a distributed way'
+    # args.distributed = distributed
+    # args.port = find_free_port()
+    # try:
+    #     mp.set_start_method('spawn')
+    # except RuntimeError:
+    #     pass
+    # mp.spawn(main_worker,
+    #          args=(world_size, args),
+    #          nprocs=world_size,
+    #          join=True)
+    parser = argparse.ArgumentParser(description='DIaM Training and Testing Script')
+    parser.add_argument('--config', type=str, help='Path to YAML config file')
+    parser.add_argument('--split', type=int, help='Data split to use')
+    parser.add_argument('--shot', type=int, help='Number of shots')
+    parser.add_argument('--gpus', type=int, default=0, help='GPU ID to use (-1 for CPU)')
+    args = parser.parse_args()
+    # if args.debug:
+    #     args.test_num = 64
+    #     args.n_runs = 2
 
-    world_size = len(args.gpus)
+    world_size = len(str(args.gpus))
     distributed = world_size > 1
     assert not distributed, 'Testing should not be done in a distributed way'
     args.distributed = distributed
     args.port = find_free_port()
-    try:
-        mp.set_start_method('spawn')
-    except RuntimeError:
-        pass
-    mp.spawn(main_worker,
-             args=(world_size, args),
-             nprocs=world_size,
-             join=True)
+    main_worker(0, world_size, args)
