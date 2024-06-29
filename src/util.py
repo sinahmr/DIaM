@@ -249,6 +249,7 @@ class CfgNode(dict):
         super(CfgNode, self).__init__(init_dict)
 
     def __getattr__(self, name):
+        print(f'ATTRIBUTE NAME....{name}')
         if name in self:
             return self[name]
         else:

@@ -14,7 +14,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from tqdm import tqdm
 
 from .classifierV1 import Classifier
-from .dataset.dataset import get_val_loader
+from .dataset.datasetV1 import get_val_loader
 from .model.pspnet import get_model
 from .util import get_model_dir, fast_intersection_and_union, setup_seed, resume_random_state, find_free_port, setup, \
     cleanup, get_cfg
@@ -27,10 +27,9 @@ def parse_args():
 # data/coco/val2014/COCO_val2014_000000039115.jpg
 def main_worker(rank: int, world_size: int, args: argparse.Namespace) -> None:
     print(f"==> Running evaluation script")
-    print(f'NAME SPACE....{args}')
-    with open(args.config, 'r') as f:
-        cfg = yaml.safe_load(f)
-    
+    # Access the 'config' argument directly
+    print(f'NAME SPACE....{args}') 
+    cfg = args
     setup(args, rank, world_size)
     
     setup_seed(cfg['EVALUATION']['manual_seed'])
@@ -173,42 +172,42 @@ def validate(args: argparse.Namespace, val_loader: torch.utils.data.DataLoader, 
 
 
 if __name__ == "__main__":
-    # parser = argparse.ArgumentParser(description='DIaM Training and Testing Script')
-    # parser.add_argument('--config', type=str, help='Path to YAML config file')
-    # args = parse_args()
-    # os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(str(x) for x in args.gpus)
-    # os.environ['OPENBLAS_NUM_THREADS'] = '1'
-    
-    # if args.debug:
-    #     args.test_num = 64
-    #     args.n_runs = 2
-
-    # world_size = len(args.gpus)
-    # distributed = world_size > 1
-    # assert not distributed, 'Testing should not be done in a distributed way'
-    # args.distributed = distributed
-    # args.port = find_free_port()
-    # try:
-    #     mp.set_start_method('spawn')
-    # except RuntimeError:
-    #     pass
-    # mp.spawn(main_worker,
-    #          args=(world_size, args),
-    #          nprocs=world_size,
-    #          join=True)
     parser = argparse.ArgumentParser(description='DIaM Training and Testing Script')
     parser.add_argument('--config', type=str, help='Path to YAML config file')
-    parser.add_argument('--split', type=int, help='Data split to use')
-    parser.add_argument('--shot', type=int, help='Number of shots')
-    parser.add_argument('--gpus', type=int, default=0, help='GPU ID to use (-1 for CPU)')
-    args = parser.parse_args()
-    # if args.debug:
-    #     args.test_num = 64
-    #     args.n_runs = 2
+    args = parse_args()
+    os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(str(x) for x in args.gpus)
+    os.environ['OPENBLAS_NUM_THREADS'] = '1'
+    
+    if args.debug:
+        args.test_num = 64
+        args.n_runs = 2
 
-    world_size = len(str(args.gpus))
+    world_size = len(args.gpus)
     distributed = world_size > 1
     assert not distributed, 'Testing should not be done in a distributed way'
     args.distributed = distributed
     args.port = find_free_port()
-    main_worker(0, world_size, args)
+    try:
+        mp.set_start_method('spawn')
+    except RuntimeError:
+        pass
+    mp.spawn(main_worker,
+             args=(world_size, args),
+             nprocs=world_size,
+             join=True)
+    # parser = argparse.ArgumentParser(description='DIaM Training and Testing Script')
+    # parser.add_argument('--config', type=str, help='Path to YAML config file')
+    # parser.add_argument('--split', type=int, help='Data split to use')
+    # parser.add_argument('--shot', type=int, help='Number of shots')
+    # parser.add_argument('--gpus', type=int, default=0, help='GPU ID to use (-1 for CPU)')
+    # args = parser.parse_args()
+    # # if args.debug:
+    # #     args.test_num = 64
+    # #     args.n_runs = 2
+
+    # world_size = len(str(args.gpus))
+    # distributed = world_size > 1
+    # assert not distributed, 'Testing should not be done in a distributed way'
+    # args.distributed = distributed
+    # args.port = find_free_port()
+    # main_worker(0, world_size, args)
