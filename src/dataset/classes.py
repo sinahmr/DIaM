@@ -1,6 +1,8 @@
 import argparse
 from collections import defaultdict
 from typing import Dict, Any
+import os
+import json
 
 classId2className = {'coco': {
                          1: 'person',
@@ -82,7 +84,8 @@ classId2className = {'coco': {
                          77: 'scissors',
                          78: 'teddy bear',
                          79: 'hair drier',
-                         80: 'toothbrush'},
+                         80: 'toothbrush'
+                         },
 
                      'pascal': {
                         1: 'airplane',
@@ -114,7 +117,7 @@ for dataset in classId2className:
         className2classId[dataset][classId2className[dataset][id]] = id
 
 
-def get_split_classes(args: argparse.Namespace) -> Dict[str, Any]:
+def get_split_classes(cfg: dict, args: argparse.Namespace) -> Dict[str, Any]:
     """
     Returns the split of classes for Pascal-5i, Pascal-10i and Coco-20i
     inputs:
@@ -124,15 +127,52 @@ def get_split_classes(args: argparse.Namespace) -> Dict[str, Any]:
          split_classes : Dict.
                          split_classes['coco'][0]['train'] = training classes in fold 0 of Coco-20i
     """
+
+    def save_splits_to_files(split_classes):
+        for dataset_name, splits in split_classes.items():
+            dataset_dir = f"{dataset_name}_splits"
+            os.makedirs(dataset_dir, exist_ok=True)
+            for split_key, split in splits.items():
+                file_path = os.path.join(dataset_dir, f"split_{split_key}.json")
+                with open(file_path, 'w') as f:
+                    json.dump(split, f)
+                print(f"Saved split {split_key} for {dataset_name} to {file_path}")
+
+    def load_splits_from_files():
+        split_classes = {'coco': defaultdict(dict), 'pascal': defaultdict(dict)}
+        for dataset_name in split_classes.keys():
+            dataset_dir = f"{dataset_name}_splits"
+            if not os.path.exists(dataset_dir):
+                continue
+            for split_file in os.listdir(dataset_dir):
+                split_key = int(split_file.split('_')[1].split('.')[0])
+                file_path = os.path.join(dataset_dir, split_file)
+                with open(file_path, 'r') as f:
+                    try:
+                        split_classes[dataset_name][split_key] = json.load(f)
+                        print(f"Loaded split {split_key} for {dataset_name} from {file_path}")
+                    except json.JSONDecodeError as e:
+                        print(f"Error loading {file_path}: {e}")
+                        continue
+        return split_classes
+
+    # Check if splits are already saved
+    if os.path.exists("coco_splits") or os.path.exists("pascal_splits"):
+        split_classes = load_splits_from_files()
+    else:
+        split_classes = {'coco': defaultdict(dict), 'pascal': defaultdict(dict)}
+
+
     split_classes = {'coco': defaultdict(dict), 'pascal': defaultdict(dict)}
 
     # =============== COCO ===================
     name = 'coco'
     class_list = list(range(1, 81))
+    # class_list = list(range(1, 8))
     split_classes[name][-1]['val'] = class_list
-    if args.use_split_coco:
-        vals_lists = [list(range(1, 78, 4)), list(range(2, 79, 4)),
-                      list(range(3, 80, 4)), list(range(4, 81, 4))]
+    if cfg['DATA']['use_split_coco']:
+        vals_lists = [list(range(1, 78, 4)), list(range(2, 79, 4)),list(range(3, 80, 4)), list(range(4, 81, 4))]
+        # vals_lists = [list(range(1, 7, 4)), list(range(2, 8, 4)),list(range(3, 8, 4)), list(range(4, 8, 4))]
         for i, val_list in enumerate(vals_lists):
             split_classes[name][i]['val'] = val_list
             split_classes[name][i]['train'] = sorted(list(set(class_list) - set(val_list)))
@@ -144,6 +184,8 @@ def get_split_classes(args: argparse.Namespace) -> Dict[str, Any]:
         for i, val_list in enumerate(vals_lists):
             split_classes[name][i]['val'] = val_list
             split_classes[name][i]['train'] = sorted(list(set(class_list) - set(val_list)))
+    
+    print(f'split classes is here.. {split_classes}')
 
     # =============== Pascal ===================
     name = 'pascal'
@@ -157,5 +199,11 @@ def get_split_classes(args: argparse.Namespace) -> Dict[str, Any]:
     for i, val_list in vals_lists:
         split_classes[name][i]['val'] = val_list
         split_classes[name][i]['train'] = sorted(list(set(class_list) - set(val_list)))
+    
+
+    save_splits_to_files(split_classes)
+    # print("CLASSES FROM....", split_classes)
+    # Now, let's create folders for each split
+    
 
     return split_classes

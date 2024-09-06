@@ -71,17 +71,22 @@ def get_next_run_id(args) -> int:
     return max(map(int, os.listdir(args.ckpt_path))) + 1
 
 
-def get_model_dir(args: argparse.Namespace, run_id=None) -> str:
+def get_model_dir(cfg:dict,args: argparse.Namespace, run_id=None) -> str:
     """
     Obtain the directory to save/load the model
     """
     if run_id is None:
-        run_id = args.load_model_id
-    path = os.path.join(args.ckpt_path,
+        run_id = cfg['EVALUATION']['load_model_id']
+    path = os.path.join(cfg['EVALUATION']['ckpt_path'],
                         str(run_id),
-                        args.data_name,
-                        f'split{args.split}',
-                        f'pspnet_resnet{args.layers}')
+                        cfg['DATA']['data_name'],
+                        f'split{cfg["DATA"]["split"]}',
+                        f'pspnet_resnet{cfg["MODEL"]["layers"]}')
+    # path = os.path.join(cfg['EVALUATION']['ckpt_path'],
+    #                 str(run_id),
+    #                 cfg['EVALUATION']['data_name'],
+    #                 f'split{cfg["DATA"]["split"]}',
+    #                 f'pspnet_resnet{cfg["MODEL"]["layers"]}')
     return path
 
 
@@ -244,6 +249,7 @@ class CfgNode(dict):
         super(CfgNode, self).__init__(init_dict)
 
     def __getattr__(self, name):
+        print(f'ATTRIBUTE NAME....{name}')
         if name in self:
             return self[name]
         else:

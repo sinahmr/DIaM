@@ -5,10 +5,10 @@ import torch.nn.functional as F
 
 from src.util import compute_wce
 from .util import to_one_hot
-from proto.PixelPrototypeCELoss import PixelPrototypeCELoss
+from .PixelPrototypeCELoss import PixelPrototypeCELoss
 
 class Classifier(object):
-    def __init__(self, args, base_weight, base_bias, n_tasks):
+    def __init__(self, args, base_weight, base_bias, n_tasks,cfg: dict, backbone,):
         self.num_base_classes_and_bg = base_weight.size(-1)
         self.num_novel_classes = args.num_classes_val
         self.num_classes = self.num_base_classes_and_bg + self.num_novel_classes
@@ -28,11 +28,20 @@ class Classifier(object):
         self.weights = args.weights
         self.pi_estimation_strategy = args.pi_estimation_strategy
         self.pi_update_at = args.pi_update_at
+        self.pixel_prototype_cls = PixelPrototypeClassifier(
+            configer=cfg,
+            backbone=backbone,
+            feature_dim=self.feature_dim,
+            num_prototypes=20,
+            num_classes=self.num_classes
+        ).cuda()
+        self.pixel_prototype_loss = PixelPrototypeCELoss(configer=cfg).cuda()
 
     @staticmethod
     def _valid_mean(t, valid_pixels, dim):
         s = (valid_pixels * t).sum(dim=dim)
         return s / (valid_pixels.sum(dim=dim) + 1e-10)
+    
 
     def init_prototypes(self, features_s: torch.tensor, gt_s: torch.tensor) -> None:
         """
@@ -40,24 +49,22 @@ class Classifier(object):
             features_s : shape [num_novel_classes, shot, c, h, w]
             gt_s : shape [num_novel_classes, shot, H, W]
         """
-        # Downsample support masks
+        # 1. Downsample support masks to match feature map resolution
         ds_gt_s = F.interpolate(gt_s.float(), size=features_s.shape[-2:], mode='nearest')
         ds_gt_s = ds_gt_s.long().unsqueeze(2)  # [n_novel_classes, shot, 1, h, w]
 
-        # Computing prototypes
-        self.novel_weight = torch.zeros((features_s.size(2), self.num_novel_classes), device=features_s.device)
-        for cls in range(self.num_base_classes_and_bg, self.num_classes):
-            novel_mask = (ds_gt_s == cls)
-            novel_prototype = self._valid_mean(features_s, novel_mask, (0, 1, 3, 4))  # [c,]
-            self.novel_weight[:, cls - self.num_base_classes_and_bg] = novel_prototype
+        # 2. Initialize novel class prototypes (from support set)
+        num_novel_classes = args.num_classes_val  # Number of novel classes
 
-        self.novel_weight /= self.novel_weight.norm(dim=0).unsqueeze(0) + 1e-10
-        assert torch.isnan(self.novel_weight).sum() == 0, self.novel_weight
-        self.novel_bias = torch.zeros((self.num_novel_classes,), device=features_s.device)
+        self.novel_prototypes = torch.zeros((features_s.size(2), num_novel_classes), device=features_s.device)
+        for cls in range(num_novel_classes):
 
-        # Copy prototypes for each task
-        self.novel_weight = self.novel_weight.unsqueeze(0).repeat(self.n_tasks, 1, 1)
-        self.novel_bias = self.novel_bias.unsqueeze(0).repeat(self.n_tasks, 1)
+            class_mask = (ds_gt_s == cls)
+            class_prototype = self._valid_mean(features_s, class_mask, (0, 1, 3, 4))
+            self.novel_prototypes[:, cls] = class_prototype
+            
+        self.novel_prototypes /= self.novel_prototypes.norm(dim=0).unsqueeze(0) + 1e-10
+
 
     def get_logits(self, features: torch.tensor) -> torch.tensor:
         """
@@ -68,16 +75,27 @@ class Classifier(object):
 
         returns :
             logits : shape [batch_size_val, num_novel_classes * shot or 1, num_classes, h, w]
+
         """
         equation = 'bochw,bcC->boChw'  # 'o' is n_novel_classes * shot for support and is 1 for query
 
         novel_logits = torch.einsum(equation, features, self.novel_weight)
-        base_logits = torch.einsum(equation, features, self.base_weight)
+        base_logits = torch.einsum(equation, features, self.base_prototypes)  # Use base_prototypes
         novel_logits += self.novel_bias.unsqueeze(1).unsqueeze(3).unsqueeze(4)
         base_logits += self.base_bias.unsqueeze(1).unsqueeze(3).unsqueeze(4)
 
         logits = torch.concat([base_logits, novel_logits], dim=2)
         return logits
+
+        # equation = 'bochw,bcC->boChw'  # 'o' is n_novel_classes * shot for support and is 1 for query
+
+        # novel_logits = torch.einsum(equation, features, self.novel_weight)
+        # base_logits = torch.einsum(equation, features, self.base_weight)
+        # novel_logits += self.novel_bias.unsqueeze(1).unsqueeze(3).unsqueeze(4)
+        # base_logits += self.base_bias.unsqueeze(1).unsqueeze(3).unsqueeze(4)
+
+        # logits = torch.concat([base_logits, novel_logits], dim=2)
+        # return logits
 
     @staticmethod
     def get_probas(logits: torch.tensor) -> torch.tensor:
@@ -251,13 +269,14 @@ class Classifier(object):
             valid_pixels_q : shape [batch_size_val, 1, h, w]
         """
         l1, l2, l3, l4 = self.weights
-        # //added section
-        criterion = PixelPrototypeCELoss() 
-        params = [self.novel_weight, self.novel_bias]
-        if self.fine_tune_base_classifier:
-            params.extend([self.base_weight, self.base_bias])
-        for m in params:
-            m.requires_grad_()
+
+        # Get the PixelPrototypeCELoss instance from the classifier
+        criterion = self.criterion  # Access the criterion from the classifier object
+
+        # Only novel prototypes are trainable parameters
+        params = [self.novel_prototypes]  # Optimize only novel prototypes
+        for p in params:
+            p.requires_grad = True
         optimizer = torch.optim.SGD(params, lr=self.lr)
 
         # Flatten the dimensions of different novel classes and shots
@@ -270,17 +289,18 @@ class Classifier(object):
         valid_pixels_q = F.interpolate(valid_pixels_q.float(), size=features_q.size()[-2:], mode='nearest').long()
 
         for iteration in range(self.adapt_iter):
-            # Create dictionary with required outputs
-            # preds = {"seg": seg_output,  "logits": logits_q,"target": gt_q }
             logits_s, logits_q = self.get_logits(features_s), self.get_logits(features_q)
             proba_s, proba_q = self.get_probas(logits_s), self.get_probas(logits_q)
-            preds = {"seg": logits_s,  "logits": logits_q,"target": features_q }
-            loss_ppc = criterion(preds, features_q) 
+
             snapshot_proba_q = self.get_base_snapshot_probas(features_q)
             distillation = self.distillation_loss(proba_q, snapshot_proba_q, valid_pixels_q, reduction='none')
             d_kl, entropy, marginal = self.get_entropies(valid_pixels_q, proba_q, reduction='none')
-            ce = self.get_ce(proba_s, valid_pixels_s, one_hot_gt_s, reduction='none')
-            loss = l1 * ce + l2 * d_kl + l3 * entropy + l4 * distillation
+
+            # Calculate loss with PixelPrototypeCELoss (using the instance from the classifier)
+            loss = classifier.criterion(
+                {'seg': proba_s, 'logits': logits_q, 'target': one_hot_gt_s}, ds_gt_s
+            )
+            loss += l2 * d_kl + l3 * entropy + l4 * distillation  # Keep your other loss terms
 
             optimizer.zero_grad()
             loss.sum(0).backward()
