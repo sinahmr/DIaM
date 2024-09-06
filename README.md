@@ -1,9 +1,3 @@
-[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/a-strong-baseline-for-generalized-few-shot/generalized-few-shot-semantic-segmentation-on)](https://paperswithcode.com/sota/generalized-few-shot-semantic-segmentation-on?p=a-strong-baseline-for-generalized-few-shot)
-[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/a-strong-baseline-for-generalized-few-shot/generalized-few-shot-semantic-segmentation-on-1)](https://paperswithcode.com/sota/generalized-few-shot-semantic-segmentation-on-1?p=a-strong-baseline-for-generalized-few-shot)
-[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/a-strong-baseline-for-generalized-few-shot/generalized-few-shot-semantic-segmentation-on-2)](https://paperswithcode.com/sota/generalized-few-shot-semantic-segmentation-on-2?p=a-strong-baseline-for-generalized-few-shot)
-[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/a-strong-baseline-for-generalized-few-shot/generalized-few-shot-semantic-segmentation-on-3)](https://paperswithcode.com/sota/generalized-few-shot-semantic-segmentation-on-3?p=a-strong-baseline-for-generalized-few-shot)
-
-
 # DIaM for Generalized Few-Shot Semantic Segmentation
 
 This repository contains the code for our **CVPR 2023** paper, [A Strong Baseline for Generalized Few-Shot Semantic Segmentation](https://arxiv.org/abs/2211.14126).
