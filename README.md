@@ -2,6 +2,11 @@
 
 [![arXiv](https://img.shields.io/badge/arXiv-2211.14126-b31b1b.svg)](https://arxiv.org/abs/2211.14126)
 
+<div align="center">
+<img src="./.assets/diam-illustration.png" width="25%">
+<p></p>
+</div>
+
 This repository contains the code for our **CVPR 2023** paper, [A Strong Baseline for Generalized Few-Shot Semantic Segmentation](https://arxiv.org/abs/2211.14126).
 
 > **Abstract:** *This paper introduces a generalized few-shot segmentation framework with a straightforward training process and an easy-to-optimize inference phase. In particular, we propose a simple yet effective model based on the well-known InfoMax principle, where the Mutual Information (MI) between the learned feature representations and their corresponding predictions is maximized. In addition, the terms derived from our MI-based formulation are coupled with a knowledge distillation term to retain the knowledge on base classes. With a simple training process, our inference model can be applied on top of any segmentation network trained on base classes. The proposed inference yields substantial improvements on the popular few-shot segmentation benchmarks PASCAL-5<sup>i</sup> and COCO-20<sup>i</sup>. Particularly, for novel classes, the improvement gains range from 7% to 26% (PASCAL-5<sup>i</sup>) and from 3% to 12% (COCO-20<sup>i</sup>) in the 1-shot and 5-shot scenarios, respectively. Furthermore, we propose a more challenging setting, where performance gaps are further exacerbated.*
@@ -161,7 +166,7 @@ To reproduce the results, please first download the pre-trained models from [her
 
 ## &#x1F64F; Acknowledgments
 
-We gratefully thank the authors of [RePRI](https://github.com/mboudiaf/RePRI-for-Few-Shot-Segmentation), [BAM](https://github.com/chunbolang/BAM), [PFENet](https://github.com/Jia-Research-Lab/PFENet), and [PyTorch Semantic Segmentation](https://github.com/hszhao/semseg) from which some parts of our code are inspired.
+We gratefully thank the authors of [RePRI](https://github.com/mboudiaf/RePRI-for-Few-Shot-Segmentation), [BAM](https://github.com/chunbolang/BAM), [PFENet](https://github.com/Jia-Research-Lab/PFENet), and [PyTorch Semantic Segmentation](https://github.com/hszhao/semseg) from which some parts of our code are inspired. The illustration is generated using ChatGPT.
 
 ## &#x1F4DA; Citation
 
