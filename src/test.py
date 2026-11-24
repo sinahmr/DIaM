@@ -155,7 +155,7 @@ def validate(args: argparse.Namespace, val_loader: torch.utils.data.DataLoader, 
     print('Average of base mIoU: {:.4f}\tAverage of novel mIoU: {:.4f} \t(over {} runs)'.format(
         base_mIoU.mean(), novel_mIoU.mean(), args.n_runs))
     print('Mean --- {:.4f}'.format(agg_mIoU), flush=True)
-    print('Average runtime / run --- {:.1f}\n'.format(runtimes.mean()))
+    print('Average runtime / run --- {:.1f}s\n'.format(runtimes.mean()))
 
     resume_random_state(random_state)
     return agg_mIoU

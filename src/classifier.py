@@ -283,5 +283,6 @@ class Classifier(object):
             optimizer.step()
 
             # Update pi
-            if (iteration + 1) in self.pi_update_at and (self.pi_estimation_strategy == 'self') and (l2 != 0):
+            if (iteration + 1) in self.pi_update_at and l2 != 0 and \
+                    (self.pi_estimation_strategy in ['self', 'imglvl']):
                 self.compute_pi(features_q, valid_pixels_q)
